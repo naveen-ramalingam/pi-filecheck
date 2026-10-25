@@ -44,7 +44,9 @@ def discover(root, recursive=False, exclude=()):
             yield Result(str(folder), status="ERROR", reason=f"Directory could not be read: {exc}")
 
 
-def test_file(path, config, hash_requested=False, expected=None, siblings=None, single=True):
+def test_file(
+    path, config, hash_requested=False, expected=None, siblings=None, single=True, heartbeat=None
+):
     path = absolute(path)
     result = Result(str(path))
     start = time.monotonic()
@@ -64,7 +66,7 @@ def test_file(path, config, hash_requested=False, expected=None, siblings=None, 
             if path != volumes.first:
                 if single:
                     return test_file(
-                        volumes.first, config, hash_requested, expected, siblings, single
+                        volumes.first, config, hash_requested, expected, siblings, single, heartbeat
                     )
                 result.status, result.reason = (
                     "SKIP",
@@ -78,6 +80,7 @@ def test_file(path, config, hash_requested=False, expected=None, siblings=None, 
             config.timeout_seconds,
             config.max_expanded_bytes,
             multipart=volumes is not None,
+            progress=heartbeat,
         )
         (
             result.status,
@@ -87,7 +90,7 @@ def test_file(path, config, hash_requested=False, expected=None, siblings=None, 
             result.tool_exit_code,
         ) = outcome
         if hash_requested or config.sha256 or expected:
-            result.sha256 = sha256_file(path, config.timeout_seconds)
+            result.sha256 = sha256_file(path, config.timeout_seconds, progress=heartbeat)
             result.checksum_status = "CALCULATED"
             if expected:
                 matched = compare(result.sha256, expected)
@@ -113,7 +116,15 @@ def test_file(path, config, hash_requested=False, expected=None, siblings=None, 
     return result
 
 
-def scan_entries(entries, config, hash_requested=False, progress=None, results=None):
+def scan_entries(
+    entries,
+    config,
+    hash_requested=False,
+    progress=None,
+    results=None,
+    completed=None,
+    heartbeat=None,
+):
     # Caller owns results, so completed records survive Ctrl+C for partial reports.
     results = [] if results is None else results
     siblings = {}
@@ -134,7 +145,10 @@ def scan_entries(entries, config, hash_requested=False, progress=None, results=N
                 hash_requested,
                 siblings=siblings.get(entry.parent),
                 single=False,
+                heartbeat=heartbeat,
             )
         )
         results.append(result)
+        if completed:
+            completed(result)
     return results

@@ -2,6 +2,16 @@
 
 Versions follow Semantic Versioning. This project is pre-1.0.
 
+## 0.1.1 — 2026-10-25
+
+- Discover files before the interactive scan confirmation, showing the actual file
+  count and total size instead of a zero-file placeholder.
+- Print each scan result immediately, so failures are visible before later large
+  archives finish.
+- Show elapsed time every 10 seconds during long checks and hashes, with approximate
+  validator read activity on Linux. Keep JSON/CSV stdout machine-readable.
+- Explain unexpected-end failures as truncated or incomplete archives.
+
 ## 0.1.0 — 2026-10-25
 
 - Initial CLI and interactive folder browser, saved configuration and mount guards.

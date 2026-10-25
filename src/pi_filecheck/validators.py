@@ -64,9 +64,9 @@ def available_tools():
     ]
 
 
-def validate(path, fmt, timeout, max_expanded_bytes, multipart=False):
+def validate(path, fmt, timeout, max_expanded_bytes, multipart=False, progress=None):
     if fmt == "exfat" and not multipart:
-        return validate_exfat_image(path, timeout)
+        return validate_exfat_image(path, timeout, progress)
     key = "multipart" if multipart else fmt
     spec = next((s for s in REGISTRY if key in s.formats), None)
     if spec is None:
@@ -157,7 +157,7 @@ def validate(path, fmt, timeout, max_expanded_bytes, multipart=False):
         )
         if zstd:
             args.append(zstd)
-    completed = run(args, timeout)
+    completed = run(args, timeout, progress=progress) if progress else run(args, timeout)
     diagnostics = completed.output.strip()
     if completed.error or completed.code is None or completed.code < 0:
         return (
@@ -202,16 +202,21 @@ def validate(path, fmt, timeout, max_expanded_bytes, multipart=False):
         for w in ("missing volume", "cannot find volume", "unexpected end", "missing volume :")
     ):
         state = "SKIP"
+    reason = "Integrity check did not succeed; see diagnostics"
+    if "unexpected end" in diagnostics.lower():
+        reason = "Archive is truncated or incomplete (unexpected end of archive)"
+    elif any(w in diagnostics.lower() for w in ("crc failed", "crc error", "data error")):
+        reason = "Archive CRC/data integrity check failed; see diagnostics"
     return (
         state,
         name,
-        "Integrity check did not succeed; see diagnostics",
+        reason,
         diagnostics,
         completed.code,
     )
 
 
-def validate_exfat_image(path, timeout):
+def validate_exfat_image(path, timeout, progress=None):
     """Only raw-volume regular files, verified exfatprogs, and the upstream -n mode.
 
     Physical devices are never accepted, mounted or unmounted by this adapter.
@@ -250,7 +255,8 @@ def validate_exfat_image(path, timeout):
             version.output.strip(),
             version.code,
         )
-    completed = run([tool, "-n", "--", str(path)], timeout)
+    argv = [tool, "-n", "--", str(path)]
+    completed = run(argv, timeout, progress=progress) if progress else run(argv, timeout)
     if completed.error or completed.code is None or completed.code < 0:
         return (
             "ERROR",

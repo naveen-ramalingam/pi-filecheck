@@ -46,6 +46,44 @@ def test_missing_executable():
     assert completed.error
 
 
+def test_silent_process_emits_activity_without_filling_diagnostics():
+    activity = []
+    completed = run(
+        [sys.executable, "-c", "import time; time.sleep(0.35)"],
+        5,
+        output_limit=16,
+        progress=activity.append,
+        progress_interval=0.05,
+    )
+    assert completed.code == 0
+    assert completed.output == ""
+    assert not completed.error
+    assert activity
+    assert all(event.elapsed > 0 for event in activity)
+
+
+def test_activity_continues_when_process_closes_output_early():
+    events = []
+    completed = run(
+        [sys.executable, "-c", "import os,time; os.close(1); os.close(2); time.sleep(0.35)"],
+        5,
+        progress=events.append,
+        progress_interval=0.05,
+    )
+    assert completed.code == 0
+    assert len(events) >= 2
+
+
+def test_incomplete_archive_has_actionable_reason(root, monkeypatch):
+    monkeypatch.setattr("pi_filecheck.validators.shutil.which", lambda _: "/trusted/7zz")
+    monkeypatch.setattr(
+        "pi_filecheck.validators.run", lambda *a, **k: Completed(2, "Unexpected end of archive")
+    )
+    outcome = validate(root / "broken.7z", "7z", 1, 100)
+    assert outcome[0] == "FAIL"
+    assert "truncated or incomplete" in outcome[2]
+
+
 def test_unusual_names_are_literal_arguments(root, monkeypatch):
     path = root / "- @evil; $(touch owned) 日本語.7z"
     calls = []

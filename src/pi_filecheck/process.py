@@ -6,6 +6,9 @@ import signal
 import subprocess
 import time
 from dataclasses import dataclass
+from pathlib import Path
+
+from .models import Activity
 
 
 @dataclass
@@ -15,7 +18,18 @@ class Completed:
     error: str = ""
 
 
-def run(args, timeout, output_limit=65536):
+def read_count(pid):
+    """Linux read() accounting, including cache hits; approximate activity, not percent."""
+    try:
+        for line in (Path("/proc") / str(pid) / "io").read_text().splitlines():
+            if line.startswith("rchar:"):
+                return int(line.split()[1])
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def run(args, timeout, output_limit=65536, progress=None, progress_interval=10):
     try:
         process = subprocess.Popen(
             args,
@@ -27,16 +41,25 @@ def run(args, timeout, output_limit=65536):
     except OSError as exc:
         return Completed(None, "", str(exc))
     captured = bytearray()
-    deadline = time.monotonic() + timeout
+    started = time.monotonic()
+    deadline = started + timeout
+    next_progress = started + progress_interval
+    initial_reads = read_count(process.pid) if progress else None
     error = ""
     try:
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ)
-            while selector.get_map():
-                if time.monotonic() >= deadline:
+            while selector.get_map() or process.poll() is None:
+                now = time.monotonic()
+                if now >= deadline:
                     error = f"Validator exceeded {timeout}s time limit"
                     break
-                events = selector.select(min(0.1, max(0, deadline - time.monotonic())))
+                if progress and now >= next_progress:
+                    reads = read_count(process.pid)
+                    processed = max(0, reads - (initial_reads or 0)) if reads is not None else None
+                    progress(Activity(now - started, processed))
+                    next_progress = now + progress_interval
+                events = selector.select(min(0.1, max(0, deadline - now)))
                 for key, _ in events:
                     chunk = os.read(key.fd, 8192)
                     if not chunk:

@@ -5,6 +5,13 @@ from dataclasses import asdict, dataclass, field
 STATES = ("PASS", "FAIL", "UNKNOWN", "SKIP", "ERROR")
 
 
+@dataclass(frozen=True)
+class Activity:
+    elapsed: float
+    processed_bytes: int | None = None
+    phase: str = "validator"
+
+
 @dataclass
 class Result:
     path: str

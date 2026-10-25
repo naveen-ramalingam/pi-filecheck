@@ -19,14 +19,14 @@ python -m pytest -q
 python -m build
 git diff --stat
 # After review and commit, only if the tag does not already exist:
-git tag -a v0.1.0 -m "Pi FileCheck v0.1.0"
-git show v0.1.0 --stat
+git tag -a v0.1.1 -m "Pi FileCheck v0.1.1"
+git show v0.1.1 --stat
 # Only after verifying remote and authorization:
 git push origin main
-git push origin v0.1.0
+git push origin v0.1.1
 ```
 
-Publish the checked tag and [release notes](releases/v0.1.0.md), clearly describing
+Publish the checked tag and [release notes](releases/v0.1.1.md), clearly describing
 this pre-1.0 release and actual tested platforms. Never claim Raspberry Pi hardware
 testing based on ARM64 cloud CI alone.
 

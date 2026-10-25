@@ -29,3 +29,20 @@ def test_hash_match_does_not_upgrade_unsupported_container(root, config):
     result = check_file(path, config, expected="0" * 64)
     assert result.status == "FAIL"
     assert result.checksum_status == "MISMATCH"
+
+
+def test_hash_activity_has_streamed_bytes(root):
+    path = root / "chunked.bin"
+    data = b"x" * (CHUNK_SIZE * 3)
+    path.write_bytes(data)
+    events = []
+    assert (
+        sha256_file(path, progress=events.append, progress_interval=0)
+        == hashlib.sha256(data).hexdigest()
+    )
+    assert [event.processed_bytes for event in events] == [
+        CHUNK_SIZE,
+        CHUNK_SIZE * 2,
+        CHUNK_SIZE * 3,
+    ]
+    assert all(event.phase == "SHA-256" for event in events)

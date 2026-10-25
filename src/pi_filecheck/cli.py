@@ -161,7 +161,7 @@ def doctor(config, fmt):
     return 2 if path_error else 0
 
 
-def run_command(args, config):
+def run_command(args, config, confirm_scan=False):
     if args.command == "version":
         print(f"Pi FileCheck {__version__}")
         return 0
@@ -193,6 +193,26 @@ def run_command(args, config):
     interrupted = False
     scan_path = ""
     current = ""
+
+    def heartbeat(activity):
+        elapsed = int(activity.elapsed)
+        duration = f"{elapsed // 3600:02}:{elapsed // 60 % 60:02}:{elapsed % 60:02}"
+        reads = ""
+        if activity.processed_bytes is not None:
+            reads = f" | read ~{activity.processed_bytes / 1024**3:.2f} GiB"
+        print(
+            f"[working] {safe_text(Path(current).name)} | {activity.phase} | elapsed {duration}{reads}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    def completed(result):
+        print(
+            f"[{result.status}] {safe_text(Path(result.path).name)} | {safe_text(result.reason)} ({result.duration:.1f}s)",
+            file=sys.stderr,
+            flush=True,
+        )
+
     try:
         if args.command == "scan":
             if args.directory and args.path_override:
@@ -220,14 +240,23 @@ def run_command(args, config):
                 f"Scan path: {safe_text(root)} | {free / 1024**3:.2f} GiB free | {len(entries)} entries",
                 file=sys.stderr,
             )
-            confirm_expensive(total, len(entries), config, args.yes)
+            file_count = sum(isinstance(entry, Path) for entry in entries)
+            confirm_expensive(total, file_count, config, args.yes, always=confirm_scan)
 
             def progress(index, count, entry):
                 nonlocal current
                 current = str(entry if isinstance(entry, Path) else entry.path)
                 print(f"[{index}/{count}] {safe_text(current)}", file=sys.stderr, flush=True)
 
-            scan_entries(entries, config, args.sha256, progress, results)
+            scan_entries(
+                entries,
+                config,
+                args.sha256,
+                progress,
+                results,
+                completed=completed,
+                heartbeat=heartbeat,
+            )
         elif args.command == "test":
             current = scan_path = str(absolute(args.file))
             before = snapshot(current)
@@ -238,7 +267,15 @@ def run_command(args, config):
                 else before[2]
             )
             confirm_expensive(total, len(volumes.paths) if volumes else 1, config, args.yes)
-            results.append(test_file(current, config, args.sha256, args.expected_sha256))
+            print(
+                f"Testing: {safe_text(current)} | {total / 1024**3:.2f} GiB",
+                file=sys.stderr,
+                flush=True,
+            )
+            results.append(
+                test_file(current, config, args.sha256, args.expected_sha256, heartbeat=heartbeat)
+            )
+            completed(results[-1])
         else:
             current = scan_path = str(absolute(args.file))
             start = time.monotonic()
@@ -251,7 +288,7 @@ def run_command(args, config):
                     result.validator = (
                         "SHA-256 comparison" if args.expected_sha256 else "SHA-256 calculation"
                     )
-                    result.sha256 = sha256_file(current, config.timeout_seconds)
+                    result.sha256 = sha256_file(current, config.timeout_seconds, progress=heartbeat)
                     result.checksum_status = "CALCULATED"
                     result.reason = "SHA-256 calculated without a trusted reference; integrity/authenticity not established"
                     if args.expected_sha256:
@@ -362,10 +399,7 @@ def interactive(config):
                     if expected:
                         argv.extend(["--expected-sha256", expected])
             if argv:
-                if choice == "1":
-                    confirm_expensive(0, 0, config, False, always=True)
-                    argv.append("--yes")
-                run_command(parser().parse_args(argv), config)
+                run_command(parser().parse_args(argv), config, confirm_scan=choice == "1")
         except (ValueError, OSError) as exc:
             print(f"Error: {safe_text(exc)}", file=sys.stderr)
         except EOFError:

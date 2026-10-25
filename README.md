@@ -4,7 +4,7 @@ Read-only file integrity checks for Raspberry Pi 5 with DietPi or Raspberry Pi O
 (Debian ARM64). Test downloaded archives before extraction, switch between local
 folders and external drives, and keep machine-readable reports.
 
-**Version 0.1.0 is an initial, pre-1.0 release.** It never extracts archives,
+**Version 0.1.1 is a pre-1.0 release.** It never extracts archives,
 executes scanned content, mounts images, repairs filesystems, or contacts a network
 service. A successful archive test does **not** establish authenticity, malware
 safety, successful installation, or playability. This project is independent of Sony.
@@ -20,7 +20,7 @@ sudo apt update
 sudo apt install python3 python3-venv git 7zip zstd lz4
 git clone https://github.com/naveen-ramalingam/pi-filecheck.git
 cd pi-filecheck
-git checkout v0.1.0
+git checkout v0.1.1
 ./install.sh
 export PATH="$HOME/.local/bin:$PATH"
 filecheck version
@@ -48,7 +48,7 @@ PYTHON=python3.12 ./install.sh --prefix "$HOME/.local"
 # Offline installation of a wheel built from a reviewed checkout
 python3 -m pip install build
 python3 -m build
-./install.sh --offline --wheel "$PWD/dist/pi_filecheck-0.1.0-py3-none-any.whl"
+./install.sh --offline --wheel "$PWD/dist/pi_filecheck-0.1.1-py3-none-any.whl"
 
 # Remove only the marked installation; preserve configuration and all reports
 ./uninstall.sh
@@ -57,7 +57,7 @@ python3 -m build
 ```
 
 Keep the checkout for `uninstall.sh`. Alternatively install a built wheel with
-`pipx install dist/pi_filecheck-0.1.0-py3-none-any.whl`; manage that installation
+`pipx install dist/pi_filecheck-0.1.1-py3-none-any.whl`; manage that installation
 using `pipx uninstall pi-filecheck`, not these scripts. No system Python is modified.
 If user files were added inside the managed virtual environment, uninstall refuses
 removal until those files have been preserved elsewhere.
@@ -98,8 +98,14 @@ The initial default is `~/Downloads`; a missing default is reported, never silen
 changed to a whole-home scan. The menu requires a TTY (`ssh -t` for a menu over
 SSH). Named subcommands work without one. Full scans of at least 10 GiB or 1,000
 entries require confirmation; use `--yes` in scripts. The menu confirms every
-folder scan. A progress line is emitted for each entry to stderr, so JSON/CSV on
-stdout stays parseable. Long individual checks do not have byte-level progress.
+folder scan, after discovering the actual count and total size. Each result is
+printed as it completes. Long checks and hashes emit an activity line every 10
+seconds with elapsed time. On Linux, native checks also show approximate bytes
+read by the validator (including cached/repeated reads or decompressor-pipe reads);
+this is activity, not a completion percentage or disk benchmark. All live output
+goes to stderr, so JSON/CSV on stdout stays parseable. A 90 GiB archive can take
+many minutes to test even when the application is working normally; wait for the
+final result. Ctrl+C stops the check and saves partial results.
 
 ## Results and exit codes
 

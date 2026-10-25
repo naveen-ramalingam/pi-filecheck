@@ -13,8 +13,8 @@ import pytest
 
 from pi_filecheck import __version__
 from pi_filecheck import config as cfg
-from pi_filecheck.cli import main
-from pi_filecheck.models import Result
+from pi_filecheck.cli import interactive, main
+from pi_filecheck.models import Activity, Result
 
 
 def test_version_consistency(capsys):
@@ -142,7 +142,7 @@ def test_interruption_saves_partial_json(config, root, capsys, monkeypatch):
     cfg.save(config)
     (root / "file.pkg").touch()
 
-    def interrupted(entries, config, requested, progress, results):
+    def interrupted(entries, config, requested, progress, results, **kwargs):
         results.append(Result(str(root / "done.pkg")))
         raise KeyboardInterrupt
 
@@ -184,3 +184,49 @@ def test_read_last_report(config, root, capsys):
     original = json.loads(capsys.readouterr().out)
     assert main(["report", "--format", "json"]) == 1
     assert json.loads(capsys.readouterr().out) == original
+
+
+def test_menu_confirms_discovered_files_not_placeholder_zero(config, root, monkeypatch, capsys):
+    (root / "one.pkg").write_bytes(b"first")
+    (root / "two.pkg").write_bytes(b"second")
+    (root / "skip-link.pkg").symlink_to(root / "one.pkg")
+    answers = iter(["1", "y", "0"])
+    monkeypatch.setattr("builtins.input", lambda _: next(answers))
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    assert interactive(config) == 0
+    captured = capsys.readouterr()
+    assert "Test 2 files," in captured.err
+    assert "Test 0 files" not in captured.err
+
+
+def test_live_activity_and_results_keep_json_stdout_clean(config, root, monkeypatch, capsys):
+    path = root / "long.7z"
+    path.write_bytes(b"synthetic")
+
+    def slow_validator(*args, progress=None, **kwargs):
+        progress(Activity(12, 1024**3))
+        return "PASS", "mock tester", "Full test succeeded", "", 0
+
+    monkeypatch.setattr("pi_filecheck.scanner.validate", slow_validator)
+    assert main(["scan", str(root), "--format", "json", "--no-report"]) == 0
+    captured = capsys.readouterr()
+    document = json.loads(captured.out)
+    assert document["summary"]["PASS"] == 1
+    assert "[working] long.7z" in captured.err
+    assert "elapsed 00:00:12" in captured.err
+    assert "read ~1.00 GiB" in captured.err
+    assert "[PASS] long.7z" in captured.err
+
+
+def test_completed_result_visible_before_next_archive(config, root, monkeypatch, capsys):
+    first, second = root / "first.7z", root / "second.7z"
+    first.touch()
+    second.touch()
+
+    def validator(path, *args, **kwargs):
+        if path == second:
+            assert "[FAIL] first.7z" in capsys.readouterr().err
+        return "FAIL", "mock", "Archive is incomplete", "", 2
+
+    monkeypatch.setattr("pi_filecheck.scanner.validate", validator)
+    assert main(["scan", str(root), "--no-report"]) == 1
