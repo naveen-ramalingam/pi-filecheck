@@ -23,7 +23,39 @@ Fixtures are generated synthetically. No scanned payloads are executed.
   CLI/config/scan and guarded uninstall ran there. Real user installations were
   not changed. The installer rejected the system Python 3.9.6 with guidance.
 
-## Linux / hardware scope
+## Raspberry Pi hardware validation (2026-10-25)
+
+The tagged v0.1.0 release at commit `39e6846` was subsequently installed and
+tested on a **Raspberry Pi 5 with 4 GiB RAM**, DietPi 10.8.2, Debian 13 (trixie)
+ARM64, and Python 3.13.5. The release wheel and source archive matched their
+published SHA-256 checksums before installation.
+
+- The complete suite ran as a normal, non-root user: **133 passed in 8.00 seconds**,
+  with no skips. Ruff lint/format checks and source/wheel builds also passed.
+- Native utilities included Debian's 7-Zip 25.01, RAR plugin and UnRAR 7.1.8,
+  zstd 1.5.7, lz4 1.10.0, and exfatprogs 1.2.9. The suite exercised actual
+  archive utilities and read-only checks on disposable exFAT images.
+- The installed command's menu, valid ZIP/7-Zip checks, corrupt ZIP rejection,
+  missing-volume handling, Unicode filenames, symlink skipping, trusted digest
+  comparison, unsupported PKG outcomes, export collision protection, mount guards,
+  and JSON/CSV/log reports were checked separately from the development checkout.
+- A shared, root-owned installation ran successfully as both the administrator
+  and a normal user. Saved folder configuration, one-time overrides, report
+  creation, and last-report retrieval worked. Ordinary checks required no root
+  privileges.
+- A newly created **1 GiB sparse zero-file on the mounted external ext4 HDD**
+  matched an independently generated SHA-256 reference. Hashing took 1.08 seconds,
+  with a sampled peak RSS of 22,752 KiB. This checks large-file streaming; sparse
+  zero reads are not a physical disk throughput benchmark.
+- The synthetic HDD file and its empty test directory were removed afterward.
+  Existing downloads were not scanned or modified, and source fixture hashes
+  remained unchanged. The live installation was preserved; uninstall tests used
+  disposable prefixes.
+
+Credentials, device addresses, private directory names, and generated reports
+are not included in the repository.
+
+## Linux CI
 
 GitHub CI separately runs Python 3.11–3.14 on Linux x86-64 and ARM64 with 7-Zip,
 zstd, lz4 and exfatprogs installed. It includes a disposable 64 MiB exFAT image
@@ -34,9 +66,12 @@ on both architectures and all four Python versions. This validates Linux ARM64
 compatibility separately from the macOS development host. Release tags are
 created only after the final commit's CI also passes.
 
-No physical Raspberry Pi, mounted removable-drive unplug, SMART passthrough,
-valid RAR fixture, specialized Sony binary validator, or multi-gigabyte full hash
-was tested locally. Large-file handling is exercised by sparse 8 GiB identification
-and multi-chunk synthetic hashing, not a real PS5 download. A passing cloud ARM64
-job is not evidence of a Pi or physical-drive test. Before 1.0, follow the hardware
-acceptance criteria in [releasing](releasing.md).
+## Remaining coverage limits
+
+Live removable-drive unplug/unmount behavior, physical exFAT partition checks,
+SMART passthrough, valid RAR fixtures, specialized Sony binary validators, and
+multi-gigabyte full hashes have not been tested. Large-file evidence consists of
+sparse 8 GiB identification, the 1 GiB HDD hash above, and multi-chunk synthetic
+hashing, not a real PS5 download. Cloud ARM64 CI and physical Pi testing are
+separate evidence. Before 1.0, complete the remaining acceptance criteria in
+[releasing](releasing.md).
