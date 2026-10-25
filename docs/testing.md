@@ -11,8 +11,8 @@ Fixtures are generated synthetically. No scanned payloads are executed.
 ## Local evidence (2026-10-25)
 
 - Host: macOS ARM64, Python 3.12.15. This is not a Raspberry Pi test.
-- `python -m pytest -q` with native 7-Zip on PATH: **129 passed, 1 skipped**
-  before the final release checks. The skipped integration needs Linux exfatprogs.
+- `python -m pytest -q` with native 7-Zip on PATH: **132 passed, 1 skipped**.
+  The skipped integration needs Linux exfatprogs.
 - Actual archive utilities exercised: 7-Zip 26.05 (ARM64, isolated Homebrew bottle
   under the ignored development environment), zstd 1.5.7 and lz4 1.10.0.
   Tests include valid/corrupt compressed streams, TAR/ZIP, split 7-Zip,

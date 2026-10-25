@@ -179,3 +179,45 @@ def test_native_sevenzip_literal_wildcards_and_encryption(root, config):
         capture_output=True,
     )
     assert check_file(protected_zip, config).status == "UNKNOWN"
+
+
+@pytest.mark.integration
+def test_actual_split_zip_checks_inner_archive(root, config):
+    executable = shutil.which("7zz") or shutil.which("7z")
+    if not executable:
+        pytest.skip("7-Zip is not installed")
+    archive = root / "source.zip"
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr("content.txt", b"synthetic payload", compress_type=zipfile.ZIP_STORED)
+    data = bytearray(archive.read_bytes())
+    first, second = root / "split.zip.001", root / "split.zip.002"
+    midpoint = len(data) // 2
+    first.write_bytes(data[:midpoint])
+    second.write_bytes(data[midpoint:])
+    assert check_file(first, config).status == "PASS"
+    data[30 + len("content.txt")] ^= 1
+    first.write_bytes(data[:midpoint])
+    second.write_bytes(data[midpoint:])
+    assert check_file(first, config).status == "FAIL"
+
+
+@pytest.mark.integration
+def test_wrong_container_cannot_pass_via_sevenzip_auto_detection(root, config):
+    executable = shutil.which("7zz") or shutil.which("7z")
+    if not executable:
+        pytest.skip("7-Zip is not installed")
+    # An unrecognized TAR header (no ustar magic) disguised as 7z must not be
+    # auto-opened as TAR and mistaken for a successful 7z integrity test.
+    stream = io.BytesIO()
+    with tarfile.open(fileobj=stream, mode="w", format=tarfile.GNU_FORMAT) as archive:
+        entry = tarfile.TarInfo("content")
+        entry.size = 1
+        archive.addfile(entry, io.BytesIO(b"x"))
+    data = bytearray(stream.getvalue())
+    data[257:265] = b"\x00" * 8
+    data[148:156] = b"        "
+    checksum = sum(data[:512])
+    data[148:156] = f"{checksum:06o}\x00 ".encode()
+    path = root / "disguised.7z"
+    path.write_bytes(data)
+    assert check_file(path, config).status == "FAIL"

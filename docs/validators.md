@@ -30,7 +30,7 @@ must never be invoked through those features by FileCheck.
 | Component | License/source | Integration |
 | --- | --- | --- |
 | Python stdlib ZIP/TAR/gzip/bz2/lzma | [PSF license](https://docs.python.org/3/license.html) (system runtime, not redistributed) | Stream content; worker timeout, expanded-byte/member limits; Linux 512 MiB address-space cap. TAR structure is distinct from payload checksums. |
-| 7-Zip | [Official license](https://www.7-zip.org/license.txt): LGPL, BSD portions, unRAR restriction in relevant components | `7zz t` or `7z t`; no extraction. Linux ARM64 binaries are an upstream distribution option; actual codec availability is build-specific. Not bundled. |
+| 7-Zip | [Official license](https://www.7-zip.org/license.txt): LGPL, BSD portions, unRAR restriction in relevant components | `7zz t` or `7z t` with the intended archive handler forced (including inner format + split chain) and wildcard matching disabled; no extraction. Linux ARM64 binaries are an upstream distribution option; actual codec availability is build-specific. Not bundled. |
 | UnRAR | [RARLAB source/license](https://www.rarlab.com/rar_add.htm), restrictive unRAR license | Optional RAR-only `t` fallback. Not a requirement for the MIT code; not bundled. |
 | Zstandard | [facebook/zstd](https://github.com/facebook/zstd), BSD-3-Clause or GPL-2.0 | `zstd -t`, or streamed `-dc` to TAR worker. Packaged for Debian ARM64. |
 | LZ4 | [lz4/lz4](https://github.com/lz4/lz4), CLI GPL-2.0; library BSD-2-Clause | `lz4 -t`; stream may omit optional content checksums. Packaged for Debian ARM64. |

@@ -42,7 +42,8 @@ def test_device_rejected(config):
     assert "regular" in result.reason
 
 
-def test_exfat_uses_only_verified_read_only_mode(root, monkeypatch):
+@pytest.mark.parametrize("version_code", [0, 16])
+def test_exfat_uses_only_verified_read_only_mode(root, monkeypatch, version_code):
     path = root / "volume.exfat"
     path.write_bytes(b"\xeb\x76\x90EXFAT   " + b"\x00" * 501)
     monkeypatch.setattr("pi_filecheck.validators.sys.platform", "linux")
@@ -51,7 +52,11 @@ def test_exfat_uses_only_verified_read_only_mode(root, monkeypatch):
 
     def fake_run(argv, timeout):
         calls.append(argv)
-        return Completed(0, "exfatprogs version : 1.2.2" if argv[-1] == "-V" else "clean")
+        return (
+            Completed(version_code, "exfatprogs version : 1.2.2")
+            if argv[-1] == "-V"
+            else Completed(0, "clean")
+        )
 
     monkeypatch.setattr("pi_filecheck.validators.run", fake_run)
     assert validate_exfat_image(path, 60)[0] == "PASS"
@@ -86,7 +91,8 @@ def test_actual_linux_exfat_image_read_only(root, config):
         stream.truncate(64 * 1024**2)
     subprocess.run([mkfs, str(path)], check=True, capture_output=True)
     before = hashlib.sha256(path.read_bytes()).digest()
-    assert check_file(path, config).status == "PASS"
+    result = check_file(path, config)
+    assert result.status == "PASS", result
     assert hashlib.sha256(path.read_bytes()).digest() == before
     # Corrupt metadata in both boot regions, retaining only the signature.
     with path.open("r+b") as stream:

@@ -109,8 +109,26 @@ def validate(path, fmt, timeout, max_expanded_bytes, multipart=False):
         args, name = [unrar, "t", "-idq", "-p-", "--", str(path)], "unrar"
     elif key in ("7z", "rar", "multipart"):
         # A nonempty dummy password prevents prompts; encrypted failures stay UNKNOWN.
+        if is_rar:
+            with open_regular(path) as stream:
+                archive_type = "rar5" if stream.read(8) == b"Rar!\x1a\x07\x01\x00" else "rar"
+        elif multipart:
+            archive_type = "zip.split" if ".zip." in path.name.lower() else "7z.split"
+        else:
+            archive_type = "7z"
         args, name = (
-            [tool, "t", "-bd", "-bb0", "-spd", "-y", "-pPI_FILECHECK_NO_PASSWORD", "--", str(path)],
+            [
+                tool,
+                "t",
+                f"-t{archive_type}",
+                "-bd",
+                "-bb0",
+                "-spd",
+                "-y",
+                "-pPI_FILECHECK_NO_PASSWORD",
+                "--",
+                str(path),
+            ],
             spec.name,
         )
     elif key in ("zst", "lz4"):
@@ -212,7 +230,9 @@ def validate_exfat_image(path, timeout):
     if not tool:
         return "UNKNOWN", name, "Missing fsck.exfat from exfatprogs; run filecheck doctor", "", None
     version = run([tool, "-V"], min(timeout, 5))
-    if version.error or version.code != 0 or "exfatprogs" not in version.output.lower():
+    # Upstream fsck prints the version, then returns its usage/syntax code (16)
+    # when -V has no device. This is an identity query, not the integrity result.
+    if version.error or version.code not in (0, 16) or "exfatprogs" not in version.output.lower():
         return (
             "UNKNOWN",
             name,

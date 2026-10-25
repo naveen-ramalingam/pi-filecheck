@@ -59,6 +59,7 @@ def test_unusual_names_are_literal_arguments(root, monkeypatch):
     outcome = validate(path, "7z", 60, 1024)
     assert outcome[0] == "PASS"
     assert calls[0][-2:] == ["--", str(path)]
+    assert "-t7z" in calls[0]
     assert not (root / "owned").exists()
 
 

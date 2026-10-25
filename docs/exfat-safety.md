@@ -16,6 +16,8 @@ signature and `fsck.exfat -V` confirms exfatprogs. It invokes only
 the exact validator and exit code. A missing tool, unconfirmed implementation or
 non-Linux system gives UNKNOWN. Partitioned disk images may have an exFAT filesystem
 at a nonzero offset; these require manual identification and are not supported.
+Some exfatprogs versions print their `-V` banner and exit 16 (usage); that is accepted
+only for the implementation query. The actual `-n` test must exit 0 to PASS.
 
 Upstream [exfatprogs fsck manual](https://github.com/exfatprogs/exfatprogs/blob/master/manpages/fsck.exfat.8)
 documents `-n` as checking without repair. Upstream
