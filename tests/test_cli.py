@@ -133,9 +133,9 @@ def test_expensive_noninteractive_requires_yes(config, root, capsys):
     config.confirm_bytes = 1
     cfg.save(config)
     (root / "x.pkg").write_bytes(b"data")
-    assert main(["scan", str(root), "--no-report"]) == 2
+    assert main(["scan", str(root), "--full", "--no-report"]) == 2
     assert "--yes" in capsys.readouterr().err
-    assert main(["scan", str(root), "--yes", "--no-report"]) == 1
+    assert main(["scan", str(root), "--full", "--yes", "--no-report"]) == 1
 
 
 def test_interruption_saves_partial_json(config, root, capsys, monkeypatch):
@@ -195,7 +195,7 @@ def test_menu_confirms_discovered_files_not_placeholder_zero(config, root, monke
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     assert interactive(config) == 0
     captured = capsys.readouterr()
-    assert "Test 2 files," in captured.err
+    assert "Quick-check 2 files," in captured.err
     assert "Test 0 files" not in captured.err
 
 
@@ -208,14 +208,14 @@ def test_live_activity_and_results_keep_json_stdout_clean(config, root, monkeypa
         return "PASS", "mock tester", "Full test succeeded", "", 0
 
     monkeypatch.setattr("pi_filecheck.scanner.validate", slow_validator)
-    assert main(["scan", str(root), "--format", "json", "--no-report"]) == 0
+    assert main(["scan", str(root), "--format", "json", "--no-report"]) == 1
     captured = capsys.readouterr()
     document = json.loads(captured.out)
-    assert document["summary"]["PASS"] == 1
+    assert document["summary"]["UNKNOWN"] == 1
     assert "[working] long.7z" in captured.err
     assert "elapsed 00:00:12" in captured.err
     assert "read ~1.00 GiB" in captured.err
-    assert "[PASS] long.7z" in captured.err
+    assert "[UNKNOWN] long.7z" in captured.err
 
 
 def test_completed_result_visible_before_next_archive(config, root, monkeypatch, capsys):

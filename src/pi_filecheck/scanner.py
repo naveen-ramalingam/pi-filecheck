@@ -45,12 +45,21 @@ def discover(root, recursive=False, exclude=()):
 
 
 def test_file(
-    path, config, hash_requested=False, expected=None, siblings=None, single=True, heartbeat=None
+    path,
+    config,
+    hash_requested=False,
+    expected=None,
+    siblings=None,
+    single=True,
+    heartbeat=None,
+    quick=False,
 ):
     path = absolute(path)
-    result = Result(str(path))
+    result = Result(str(path), check_mode="quick" if quick else "full")
     start = time.monotonic()
     try:
+        if quick and (hash_requested or expected):
+            raise ValueError("Quick checks do not hash contents; use the hash command explicitly")
         if expected:
             trusted_digest(expected)
         before = snapshot(path)
@@ -66,7 +75,14 @@ def test_file(
             if path != volumes.first:
                 if single:
                     return test_file(
-                        volumes.first, config, hash_requested, expected, siblings, single, heartbeat
+                        volumes.first,
+                        config,
+                        hash_requested,
+                        expected,
+                        siblings,
+                        single,
+                        heartbeat,
+                        quick,
                     )
                 result.status, result.reason = (
                     "SKIP",
@@ -81,6 +97,7 @@ def test_file(
             config.max_expanded_bytes,
             multipart=volumes is not None,
             progress=heartbeat,
+            quick=quick,
         )
         (
             result.status,
@@ -89,7 +106,10 @@ def test_file(
             result.diagnostics,
             result.tool_exit_code,
         ) = outcome
-        if hash_requested or config.sha256 or expected:
+        if quick and result.status == "PASS":
+            result.status = "UNKNOWN"
+            result.reason = "Quick precheck completed; file contents were not verified"
+        if not quick and (hash_requested or config.sha256 or expected):
             result.sha256 = sha256_file(path, config.timeout_seconds, progress=heartbeat)
             result.checksum_status = "CALCULATED"
             if expected:
@@ -124,6 +144,7 @@ def scan_entries(
     results=None,
     completed=None,
     heartbeat=None,
+    quick=False,
 ):
     # Caller owns results, so completed records survive Ctrl+C for partial reports.
     results = [] if results is None else results
@@ -146,6 +167,7 @@ def scan_entries(
                 siblings=siblings.get(entry.parent),
                 single=False,
                 heartbeat=heartbeat,
+                quick=quick,
             )
         )
         results.append(result)

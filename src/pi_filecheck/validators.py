@@ -64,9 +64,28 @@ def available_tools():
     ]
 
 
-def validate(path, fmt, timeout, max_expanded_bytes, multipart=False, progress=None):
+def validate(path, fmt, timeout, max_expanded_bytes, multipart=False, progress=None, quick=False):
+    if quick:
+        timeout = min(timeout, 30)
+        if fmt not in ("7z", "rar", "zip", "exfat") and not multipart:
+            return (
+                "UNKNOWN",
+                "quick identification",
+                f"No quick structural check for {fmt}; contents were not tested",
+                "",
+                None,
+            )
     if fmt == "exfat" and not multipart:
-        return validate_exfat_image(path, timeout, progress)
+        outcome = validate_exfat_image(path, timeout, progress)
+        if quick and outcome[0] == "PASS":
+            return (
+                "UNKNOWN",
+                outcome[1],
+                "exFAT metadata consistency check succeeded; file contents were not verified",
+                outcome[3],
+                outcome[4],
+            )
+        return outcome
     key = "multipart" if multipart else fmt
     spec = next((s for s in REGISTRY if key in s.formats), None)
     if spec is None:
@@ -116,7 +135,7 @@ def validate(path, fmt, timeout, max_expanded_bytes, multipart=False, progress=N
             None,
         )
     if unrar:
-        args, name = [unrar, "t", "-idq", "-p-", "--", str(path)], "unrar"
+        args, name = [unrar, "lt" if quick else "t", "-idq", "-p-", "--", str(path)], "unrar"
     elif key in ("7z", "rar", "multipart"):
         # A nonempty dummy password prevents prompts; encrypted failures stay UNKNOWN.
         if is_split:
@@ -129,7 +148,7 @@ def validate(path, fmt, timeout, max_expanded_bytes, multipart=False, progress=N
         args, name = (
             [
                 tool,
-                "t",
+                "l" if quick else "t",
                 f"-t{archive_type}",
                 "-bd",
                 "-bb0",
@@ -149,7 +168,7 @@ def validate(path, fmt, timeout, max_expanded_bytes, multipart=False, progress=N
                 sys.executable,
                 "-I",
                 str(Path(__file__).with_name("_worker.py")),
-                fmt,
+                "zip.quick" if quick and fmt == "zip" else fmt,
                 str(path),
                 str(max_expanded_bytes),
             ],
@@ -157,7 +176,10 @@ def validate(path, fmt, timeout, max_expanded_bytes, multipart=False, progress=N
         )
         if zstd:
             args.append(zstd)
-    completed = run(args, timeout, progress=progress) if progress else run(args, timeout)
+    if quick and key in ("7z", "rar", "multipart"):
+        completed = run(args, timeout, progress=progress, discard_stdout=True)
+    else:
+        completed = run(args, timeout, progress=progress) if progress else run(args, timeout)
     diagnostics = completed.output.strip()
     if completed.error or completed.code is None or completed.code < 0:
         return (
@@ -168,6 +190,14 @@ def validate(path, fmt, timeout, max_expanded_bytes, multipart=False, progress=N
             completed.code,
         )
     if completed.code == 0:
+        if quick:
+            return (
+                "UNKNOWN",
+                f"{name} metadata precheck",
+                "Archive headers/directory readable; file contents were not tested",
+                diagnostics,
+                0,
+            )
         reason = spec.success
         if name == "unrar":
             reason = "UnRAR full archive integrity test succeeded"
@@ -202,7 +232,11 @@ def validate(path, fmt, timeout, max_expanded_bytes, multipart=False, progress=N
         for w in ("missing volume", "cannot find volume", "unexpected end", "missing volume :")
     ):
         state = "SKIP"
-    reason = "Integrity check did not succeed; see diagnostics"
+    reason = (
+        "Archive metadata precheck failed; incomplete or damaged archive (see diagnostics)"
+        if quick
+        else "Integrity check did not succeed; see diagnostics"
+    )
     if "unexpected end" in diagnostics.lower():
         reason = "Archive is truncated or incomplete (unexpected end of archive)"
     elif any(w in diagnostics.lower() for w in ("crc failed", "crc error", "data error")):

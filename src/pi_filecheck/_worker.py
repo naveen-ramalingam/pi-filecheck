@@ -73,12 +73,14 @@ def validate(fmt, path, limit, zstd=""):
     # Source checks are repeated in this process. No block devices, FIFOs or symlinks.
     if not stat.S_ISREG(os.lstat(path).st_mode):
         raise OSError("Worker input is not a regular file")
-    if fmt == "zip":
+    if fmt in ("zip", "zip.quick"):
         total = 0
         with zipfile.ZipFile(path) as archive:
             members = archive.infolist()
             if len(members) > 100000:
                 raise LimitError("ZIP has more than 100000 members")
+            if fmt == "zip.quick":
+                return
             if any(m.flag_bits & 1 for m in members):
                 raise Unsupported("Encrypted ZIP requires a password; not verified")
             for member in members:
@@ -114,7 +116,11 @@ def main():
         validate(
             sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4] if len(sys.argv) > 4 else ""
         )
-        print("Integrity check completed")
+        print(
+            "ZIP directory metadata readable; contents not checked"
+            if sys.argv[1] == "zip.quick"
+            else "Integrity check completed"
+        )
         return 0
     except (Unsupported, NotImplementedError) as exc:
         print(str(exc)[:16000])

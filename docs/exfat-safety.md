@@ -16,6 +16,9 @@ signature and `fsck.exfat -V` confirms exfatprogs. It invokes only
 the exact validator and exit code. A missing tool, unconfirmed implementation or
 non-Linux system gives UNKNOWN. Partitioned disk images may have an exFAT filesystem
 at a nonzero offset; these require manual identification and are not supported.
+The default quick mode reports UNKNOWN after clean filesystem metadata checks,
+because image contents are not verified. Explicit `--full` can PASS the documented
+filesystem-consistency test only; that still does not validate archive payloads.
 Some exfatprogs versions print their `-V` banner and exit 16 (usage); that is accepted
 only for the implementation query. The actual `-n` test must exit 0 to PASS.
 

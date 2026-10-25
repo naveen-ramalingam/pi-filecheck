@@ -29,18 +29,21 @@ def read_count(pid):
     return None
 
 
-def run(args, timeout, output_limit=65536, progress=None, progress_interval=10):
+def run(
+    args, timeout, output_limit=65536, progress=None, progress_interval=10, discard_stdout=False
+):
     try:
         process = subprocess.Popen(
             args,
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            stdout=subprocess.DEVNULL if discard_stdout else subprocess.PIPE,
+            stderr=subprocess.PIPE if discard_stdout else subprocess.STDOUT,
             start_new_session=True,
         )
     except OSError as exc:
         return Completed(None, "", str(exc))
     captured = bytearray()
+    output_stream = process.stderr if discard_stdout else process.stdout
     started = time.monotonic()
     deadline = started + timeout
     next_progress = started + progress_interval
@@ -48,7 +51,7 @@ def run(args, timeout, output_limit=65536, progress=None, progress_interval=10):
     error = ""
     try:
         with selectors.DefaultSelector() as selector:
-            selector.register(process.stdout, selectors.EVENT_READ)
+            selector.register(output_stream, selectors.EVENT_READ)
             while selector.get_map() or process.poll() is None:
                 now = time.monotonic()
                 if now >= deadline:
@@ -84,5 +87,5 @@ def run(args, timeout, output_limit=65536, progress=None, progress_interval=10):
         except ProcessLookupError:
             pass
         process.wait()
-        process.stdout.close()
+        output_stream.close()
     return Completed(process.returncode, captured.decode("utf-8", errors="replace"), error)

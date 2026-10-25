@@ -54,6 +54,22 @@ def parser():
     ident = commands.add_parser("identify", help="Identify content; never proves integrity")
     ident.add_argument("file")
     for cmd in (scan, single):
+        mode = cmd.add_mutually_exclusive_group()
+        mode.add_argument(
+            "--quick",
+            dest="mode",
+            action="store_const",
+            const="quick",
+            help="Metadata precheck only (default); never proves file contents intact",
+        )
+        mode.add_argument(
+            "--full",
+            dest="mode",
+            action="store_const",
+            const="full",
+            help="Explicit full integrity test; can read/decompress the whole file",
+        )
+        cmd.set_defaults(mode="quick")
         cmd.add_argument("--sha256", action="store_true", help="Also stream a SHA-256 digest")
         cmd.add_argument("--timeout", type=int, metavar="SECONDS")
         cmd.add_argument(
@@ -85,10 +101,14 @@ def parser():
     return root
 
 
-def confirm_expensive(total, count, config, yes, always=False):
-    if yes or not (always or total >= config.confirm_bytes or count >= 1000):
+def confirm_expensive(total, count, config, yes, always=False, quick=False):
+    if yes or not (always or (not quick and (total >= config.confirm_bytes or count >= 1000))):
         return
-    message = f"Test {count} files, {total / 1024**3:.2f} GiB? This may read/decompress all data."
+    message = (
+        f"Quick-check {count} files, {total / 1024**3:.2f} GiB total? Metadata only; file contents are not verified."
+        if quick
+        else f"Test {count} files, {total / 1024**3:.2f} GiB? This may read/decompress all data."
+    )
     if not sys.stdin.isatty():
         raise ValueError(message + " Rerun with --yes for non-interactive use.")
     print(message, file=sys.stderr)
@@ -189,6 +209,11 @@ def run_command(args, config, confirm_scan=False):
     if getattr(args, "max_expanded_bytes", None) is not None:
         config.max_expanded_bytes = args.max_expanded_bytes
     config.validate()
+    quick = getattr(args, "mode", "full") == "quick"
+    if quick and (getattr(args, "sha256", False) or getattr(args, "expected_sha256", None)):
+        raise ValueError(
+            "Quick checks do not hash file contents. Use filecheck hash explicitly or opt in with --full."
+        )
     results = []
     interrupted = False
     scan_path = ""
@@ -241,7 +266,12 @@ def run_command(args, config, confirm_scan=False):
                 file=sys.stderr,
             )
             file_count = sum(isinstance(entry, Path) for entry in entries)
-            confirm_expensive(total, file_count, config, args.yes, always=confirm_scan)
+            confirm_expensive(total, file_count, config, args.yes, always=confirm_scan, quick=quick)
+            if quick:
+                print(
+                    "Quick precheck: metadata only, 30s limit per checker; readable metadata is UNKNOWN, not full verification.",
+                    file=sys.stderr,
+                )
 
             def progress(index, count, entry):
                 nonlocal current
@@ -256,6 +286,7 @@ def run_command(args, config, confirm_scan=False):
                 results,
                 completed=completed,
                 heartbeat=heartbeat,
+                quick=quick,
             )
         elif args.command == "test":
             current = scan_path = str(absolute(args.file))
@@ -266,20 +297,29 @@ def run_command(args, config, confirm_scan=False):
                 if volumes and not volumes.reason
                 else before[2]
             )
-            confirm_expensive(total, len(volumes.paths) if volumes else 1, config, args.yes)
+            confirm_expensive(
+                total, len(volumes.paths) if volumes else 1, config, args.yes, quick=quick
+            )
             print(
-                f"Testing: {safe_text(current)} | {total / 1024**3:.2f} GiB",
+                f"{'Quick precheck' if quick else 'Testing'}: {safe_text(current)} | {total / 1024**3:.2f} GiB",
                 file=sys.stderr,
                 flush=True,
             )
             results.append(
-                test_file(current, config, args.sha256, args.expected_sha256, heartbeat=heartbeat)
+                test_file(
+                    current,
+                    config,
+                    args.sha256,
+                    args.expected_sha256,
+                    heartbeat=heartbeat,
+                    quick=quick,
+                )
             )
             completed(results[-1])
         else:
             current = scan_path = str(absolute(args.file))
             start = time.monotonic()
-            result = Result(current)
+            result = Result(current, check_mode=args.command)
             try:
                 result.size = snapshot(current)[2]
                 identified = identify(absolute(current))
@@ -373,7 +413,7 @@ def interactive(config):
         except (OSError, ValueError) as exc:
             print(safe_text(exc))
         print(
-            "\n1. Scan configured folder\n2. Choose another folder\n3. Test a single file\n4. Check a multipart archive\n5. Calculate or compare checksums\n6. Identify a file\n7. Check tool availability\n8. View last report\n9. Configuration\n0. Exit"
+            "\n1. Quick-check configured folder\n2. Choose another folder\n3. Quick-check a single file\n4. Quick-check a multipart archive\n5. Calculate or compare SHA-256 (reads whole file)\n6. Identify a file\n7. Check tool availability\n8. View last report\n9. Configuration\n0. Exit"
         )
         try:
             choice = input("Choice: ").strip()

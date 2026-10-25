@@ -18,6 +18,14 @@ def test_output_bounded():
     assert len(completed.output) == 4096
 
 
+def test_discarded_listing_cannot_fill_error_diagnostics():
+    code = "import sys; print('x'*200000); print('error details',file=sys.stderr)"
+    completed = run([sys.executable, "-c", code], 5, output_limit=32, discard_stdout=True)
+    assert completed.code == 0
+    assert completed.output.strip() == "error details"
+    assert not completed.error
+
+
 def test_process_keyboardinterrupt_cleanup(monkeypatch):
     import pi_filecheck.process as process_module
 

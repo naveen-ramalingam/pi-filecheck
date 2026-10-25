@@ -1,13 +1,19 @@
 # Pi FileCheck
 
-Read-only file integrity checks for Raspberry Pi 5 with DietPi or Raspberry Pi OS
-(Debian ARM64). Test downloaded archives before extraction, switch between local
+Read-only file prechecks and optional integrity checks for Raspberry Pi 5 with DietPi or Raspberry Pi OS
+(Debian ARM64). Quickly precheck downloaded archives before extraction, switch between local
 folders and external drives, and keep machine-readable reports.
 
 **Version 0.1.1 is a pre-1.0 release.** It never extracts archives,
 executes scanned content, mounts images, repairs filesystems, or contacts a network
 service. A successful archive test does **not** establish authenticity, malware
 safety, successful installation, or playability. This project is independent of Sony.
+
+**Scans and file tests default to quick metadata prechecks.** These can find damaged
+headers, missing end records and known missing volumes without decompressing entire
+archives. Readable metadata is **UNKNOWN**, never PASS: corruption in the middle of
+a file can remain undetected. Full payload testing requires an explicit `--full`.
+The interactive menu runs quick checks only.
 
 ## Install on DietPi / Raspberry Pi OS
 
@@ -79,7 +85,7 @@ filecheck scan --recursive --yes
 filecheck scan /mnt/hdd --require-mount /mnt/hdd --yes
 filecheck scan --format json --yes > scan-summary.json
 filecheck scan --format csv --output /tmp/new-report.csv --yes
-filecheck test '/mnt/hdd/game archive.7z' --sha256
+filecheck test '/mnt/hdd/game archive.7z' # quick metadata precheck
 filecheck test '/mnt/hdd/game.part02.rar' # checks through the first volume
 filecheck hash /mnt/hdd/file.pkg
 filecheck hash /mnt/hdd/file.pkg --expected-sha256 YOUR_64_HEX_DIGEST
@@ -87,6 +93,8 @@ filecheck identify /mnt/hdd/file.pkg --format json
 filecheck report
 filecheck doctor --format json
 filecheck --help
+# Optional, only when you deliberately want a full data test:
+filecheck test '/mnt/hdd/game archive.7z' --full --sha256 --yes
 ```
 
 Use `--output` when collision protection is needed. Existing outputs, symlinks and
@@ -96,7 +104,7 @@ from source files and preferably outside the scanned folder.
 
 The initial default is `~/Downloads`; a missing default is reported, never silently
 changed to a whole-home scan. The menu requires a TTY (`ssh -t` for a menu over
-SSH). Named subcommands work without one. Full scans of at least 10 GiB or 1,000
+SSH). Named subcommands work without one. Explicit full scans of at least 10 GiB or 1,000
 entries require confirmation; use `--yes` in scripts. The menu confirms every
 folder scan, after discovering the actual count and total size. Each result is
 printed as it completes. Long checks and hashes emit an activity line every 10
@@ -105,7 +113,11 @@ read by the validator (including cached/repeated reads or decompressor-pipe read
 this is activity, not a completion percentage or disk benchmark. All live output
 goes to stderr, so JSON/CSV on stdout stays parseable. A 90 GiB archive can take
 many minutes to test even when the application is working normally; wait for the
-final result. Ctrl+C stops the check and saves partial results.
+final result. Quick checks have a 30-second limit per checker and do not hash
+payloads, even if saved `sha256` is true. Compressed TAR and standalone compression
+streams without an efficient metadata-only adapter receive UNKNOWN in quick mode.
+ZIP, 7-Zip and RAR receive directory/header checks; raw exFAT images can receive
+read-only metadata consistency checks. Ctrl+C stops a check and saves partial results.
 
 ## Results and exit codes
 
@@ -125,7 +137,7 @@ because they intentionally make no integrity claim. A continuation SKIP makes a
 multipart folder scan return 1 even when its first-volume result passes; consult
 the per-set first-volume result or use `test` for a whole-set decision.
 
-## Supported checks
+## Supported full checks (`--full`)
 
 | Formats | Test | Limits |
 | --- | --- | --- |
@@ -163,7 +175,7 @@ that the download is correct. Compare to a reference obtained independently from
 a publisher you trust. Even a matching digest cannot make a malicious file safe,
 and a reference downloaded alongside a compromised file may share the compromise.
 
-`hash --expected-sha256` can PASS the **byte comparison** only. `test
+`hash --expected-sha256` can PASS the **byte comparison** only. `test --full
 --expected-sha256` records that comparison separately and retains UNKNOWN if the
 container has no validator. A mismatch is FAIL. Hashing and archive validation are
 separate reads, so stop active downloads before testing.
@@ -262,7 +274,7 @@ Python 3.11–3.14. ARM64 CI is not a Raspberry Pi 5 hardware test. Actual valid
 evidence and remaining hardware checks are recorded in [testing](docs/testing.md).
 
 The project uses Semantic Versioning; package version, `VERSION`, CLI, changelog,
-and tags must agree. See [releasing](docs/releasing.md). Start with v0.1.0;
+and tags must agree. See [releasing](docs/releasing.md). The initial release was v0.1.0;
 v1.0.0 requires the documented Linux/ARM64, hardware and safety release criteria.
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and the
 [MIT license](LICENSE).

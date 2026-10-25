@@ -4,6 +4,11 @@ Versions follow Semantic Versioning. This project is pre-1.0.
 
 ## 0.1.1 — 2026-10-25
 
+- Make metadata-only quick prechecks the default for scans and file tests. Readable
+  metadata is UNKNOWN; detected damage is FAIL. Full payload tests require explicit
+  `--full`; the interactive menu uses quick checks only.
+- Bound quick checker calls to 30 seconds and avoid automatic SHA-256 reads in quick
+  mode, including when hashing is enabled in saved settings.
 - Discover files before the interactive scan confirmation, showing the actual file
   count and total size instead of a zero-file placeholder.
 - Print each scan result immediately, so failures are visible before later large

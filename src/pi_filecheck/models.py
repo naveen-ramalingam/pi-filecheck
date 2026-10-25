@@ -17,6 +17,7 @@ class Result:
     path: str
     size: int = 0
     format: str = "unknown"
+    check_mode: str = "none"
     detection: str = ""
     validator: str = "none"
     duration: float = 0.0
