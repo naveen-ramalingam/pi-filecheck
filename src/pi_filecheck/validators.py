@@ -1,5 +1,6 @@
 """Explicit validator registry. No signature or hash is itself a container PASS."""
 
+import re
 import shutil
 import sys
 from dataclasses import dataclass
@@ -86,7 +87,16 @@ def validate(path, fmt, timeout, max_expanded_bytes, multipart=False):
     tools = spec.tools
     tool = next((shutil.which(t) for t in tools if shutil.which(t)), None)
     # UnRAR is a read-only alternative for RAR when 7-Zip is absent.
-    is_rar = fmt == "rar" or ".rar" in path.name.lower()
+    is_split = multipart and bool(re.search(r"\.(?:7z|zip)\.\d{3}$", path.name, re.I))
+    if multipart and ((is_split and fmt not in ("7z", "zip")) or (not is_split and fmt != "rar")):
+        return (
+            "UNKNOWN",
+            spec.name,
+            "Multipart naming and detected content have no compatible full-set validator",
+            "",
+            None,
+        )
+    is_rar = fmt == "rar" and not is_split
     unrar = shutil.which("unrar") if key in ("rar", "multipart") and is_rar and not tool else None
     if tools and not tool and not unrar:
         return (
@@ -109,11 +119,11 @@ def validate(path, fmt, timeout, max_expanded_bytes, multipart=False):
         args, name = [unrar, "t", "-idq", "-p-", "--", str(path)], "unrar"
     elif key in ("7z", "rar", "multipart"):
         # A nonempty dummy password prevents prompts; encrypted failures stay UNKNOWN.
-        if is_rar:
+        if is_split:
+            archive_type = f"{fmt}.split"
+        elif is_rar:
             with open_regular(path) as stream:
                 archive_type = "rar5" if stream.read(8) == b"Rar!\x1a\x07\x01\x00" else "rar"
-        elif multipart:
-            archive_type = "zip.split" if ".zip." in path.name.lower() else "7z.split"
         else:
             archive_type = "7z"
         args, name = (

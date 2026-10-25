@@ -28,7 +28,11 @@ Fixtures are generated synthetically. No scanned payloads are executed.
 GitHub CI separately runs Python 3.11–3.14 on Linux x86-64 and ARM64 with 7-Zip,
 zstd, lz4 and exfatprogs installed. It includes a disposable 64 MiB exFAT image
 created solely as a synthetic fixture; checks assert no source content changes.
-CI run evidence is recorded when those jobs complete.
+[CI run 40203697265](https://github.com/naveen-ramalingam/pi-filecheck/actions/runs/40203697265)
+passed all eight jobs at commit `59f1b2a`, including the actual exFAT image check
+on both architectures and all four Python versions. This validates Linux ARM64
+compatibility separately from the macOS development host. Release tags are
+created only after the final commit's CI also passes.
 
 No physical Raspberry Pi, mounted removable-drive unplug, SMART passthrough,
 valid RAR fixture, specialized Sony binary validator, or multi-gigabyte full hash

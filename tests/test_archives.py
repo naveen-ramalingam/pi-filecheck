@@ -132,6 +132,9 @@ def test_actual_sevenzip_and_split(root, config):
     archive = root / "archive.7z"
     subprocess.run([executable, "a", str(archive), str(source)], check=True, capture_output=True)
     assert check_file(archive, config).status == "PASS"
+    other = root / "name.contains.rar.7z"
+    other.write_bytes(archive.read_bytes())
+    assert check_file(other, config).status == "PASS"
     data = archive.read_bytes()
     midpoint = len(data) // 2
     first, second = root / "split.7z.001", root / "split.7z.002"
